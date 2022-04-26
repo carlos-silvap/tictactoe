@@ -49,8 +49,8 @@ def findObject(object:string, hsv, frame):
         upper_range = np.array([60, 255, 255])
         color = (0,255,0)
     else:
-        lower_range = np.array([[40, 42, 162]])
-        upper_range = np.array([91, 255, 255])
+        lower_range = np.array([[55, 40, 160]])
+        upper_range = np.array([85, 255, 255])
         color = (255,0,0)
     mask = cv2.inRange(hsv, lower_range, upper_range)
     mask = cv2.erode(mask, None, iterations=2)
@@ -68,51 +68,17 @@ def findObject(object:string, hsv, frame):
                 thickness=1, lineType=cv2.LINE_AA)
 
     count = (len(cent))
-    print(object+":",count)
-    cv2.imshow("Frames", mask)    
+    print(object+":",count)   
 
-
-def main():
-    
-    parser = argparse.ArgumentParser()
-    
-    parser.add_argument("-b", "--buffer", type=int, default=16,
-	help="max buffer size")
-    arguments = vars(parser.parse_args())
-    
-    #Initial position of the head
-    #reachy.turn_on('head')
-    
-    #Parameters for tracking the defined color
-    greenLower = (89, 0, 162)
-    greenUpper = (255, 107, 224)
-    
-    pts = deque(maxlen=arguments["buffer"])
-    
-
-    #Initialize ROS
-    rclpy.init()
-    time.sleep(1)
-    image_getter = RosCameraSubscriber(node_name='image_viewer', side = "right")
-    
-    while True:
-        image_getter.update_image()
-        
-        #cv.imshow(args.side + ' camera', image_getter.cam_img)
-        frame = image_getter.cam_img
-        # resize the frame, blur it, and convert it to the HSV color space
-        frame = imutils.resize(frame, width = 600)
-        blurred = cv2.GaussianBlur(frame, (11, 11), 0)
-        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-        
-        # construct a mask for the color "green", then perform a series of dilations and erosions to remove any small
-        # blobs left in the mask
+def findBoard(hsv, frame):
+        #Parameters for tracking the defined color
+        greenLower = (90, 10, 160)
+        greenUpper = (255, 100, 255)
         mask = cv2.inRange(hsv, greenLower, greenUpper)
         for i in range(5):
             mask = cv2.erode(mask, None, iterations=2)
             mask = cv2.dilate(mask, None, iterations=2)        
 
-        # find contours in the mask and initialize the current (x, y) center of the ball
         cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cnts = cnts[0] if len(cnts) == 2 else cnts[1]
         for c in cnts:
@@ -129,11 +95,45 @@ def main():
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
                 cv2.drawContours(frame,[box],0,(0,0,255),2)
-                ROI = frame[y:y+h, x:x+w]
+                #ROI = frame[y:y+h, x:x+w]
+        cv2.imshow("Frame", mask)
+
+def main():
+    
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("-b", "--buffer", type=int, default=16,
+	help="max buffer size")
+    arguments = vars(parser.parse_args())
+    
+    #Initial position of the head
+    #reachy.turn_on('head')
+    
+
+    
+    pts = deque(maxlen=arguments["buffer"])
+    
+
+    #Initialize ROS
+    rclpy.init()
+    time.sleep(1)
+    image_getter = RosCameraSubscriber(node_name='image_viewer', side = "right")
+    
+    while True:
+        image_getter.update_image()
+        
+        #cv.imshow(args.side + ' camera', image_getter.cam_img)
+        frame = image_getter.cam_img	
+        cv2.imwrite('image.jpg', frame) 
+        # resize the frame, blur it, and convert it to the HSV color space
+        frame = imutils.resize(frame, width = 600)
+        blurred = cv2.GaussianBlur(frame, (11, 11), 0)
+        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+        
+        findBoard(hsv, frame)
         findObject("cube", hsv, frame)
         findObject("cylinder", hsv, frame)
         cv2.imshow("Frame", frame)
-        cv2.imshow("Framee", mask)
     
 
 
