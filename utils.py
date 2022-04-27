@@ -1,7 +1,12 @@
 import cv2
 import numpy as np
+import pickle
 
-
+def intializePredectionModel():
+    #model = load_model('Resources/myModel.h5')
+    pickle_in = open("model_trained.p","rb")
+    model = pickle.load(pickle_in)
+    return model
 #### 1 - Preprocessing Image
 def preProcess(img):
     imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # CONVERT IMAGE TO GRAY SCALE
@@ -93,19 +98,28 @@ def stackImages(imgArray,scale):
     return ver
 
 
+#### PREPORCESSING FUNCTION
+def preProcessing(img):
+    img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    img = cv2.equalizeHist(img)
+    img = img/255
+    return img
+
+
+
+
 #### 4 - GET PREDECTIONS ON ALL IMAGES
 def getPredection(boxes,model):
     result = []
     for image in boxes:
         ## PREPARE IMAGE
         img = np.asarray(image)
-        img = img[4:img.shape[0] - 4, 4:img.shape[1] -4]
-        img = cv2.resize(img, (28, 28))
-        img = img / 255
-        img = img.reshape(1, 28, 28, 1)
+        img = cv2.resize(img, (32, 32))
+        img = preProcessing(img)
+        img = img.reshape(1, 32, 32, 1)
         ## GET PREDICTION
         predictions = model.predict(img)
-        classIndex = model.predict_classes(img)
+        classIndex  = np.argmax(predictions,axis=1)
         probabilityValue = np.amax(predictions)
         ## SAVE TO RESULT
         if probabilityValue > 0.8:
@@ -113,6 +127,19 @@ def getPredection(boxes,model):
         else:
             result.append(0)
     return result
+
+#### 6 -  TO DISPLAY THE SOLUTION ON THE IMAGE
+def displayNumbers(img,numbers,color = (0,255,0)):
+    secW = int(img.shape[1]/3)
+    secH = int(img.shape[0]/3)
+    for x in range (0,3):
+        for y in range (0,3):
+            if numbers[(y*3)+x] != 0 :
+                 cv2.putText(img, str(numbers[(y*3)+x]),
+                               (x*secW+int(secW/2)-10, int((y+0.8)*secH)), cv2.FONT_HERSHEY_COMPLEX_SMALL,
+                            2, color, 2, cv2.LINE_AA)
+    return 
+
 
 def findObject(object:str, hsv, frame):
     if (object == "cube"):

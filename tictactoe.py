@@ -3,10 +3,11 @@ import os
 from utils import *
 
 
-
 ########################################################################
 pathImage = "image.jpg"
-
+pickle_in = open("model_trained.p","rb")
+model = pickle.load(pickle_in)
+#model = intializePredectionModel()  # LOAD THE CNN MODEL
 heightImg = 450
 widthImg = 450
 ########################################################################
@@ -42,21 +43,29 @@ if biggest.size != 0:
     imgSolvedDigits = imgBlank.copy()
     boxes = splitBoxes(imgWarpColored)
     print(len(boxes))
+    numbers = getPredection(boxes, model)
+    print(numbers)
+    #imgDetectedDigits = displayNumbers(imgDetectedDigits, numbers, color=(255, 0, 255))
+    numbers = np.asarray(numbers)
+    posArray = np.where(numbers > 0, 0, 1)
+    print(posArray)
 
-    
-    #numbers = getPredection(boxes, model)
-    #for i in range(9):
-    #    hsv = cv2.cvtColor(boxes[i], cv2.COLOR_BGR2HSV)
-    #    findObject("cube", hsv, boxes[i])
-    #    findObject("cylinder", hsv, boxes[i])
+    #### 5. FIND SOLUTION OF THE BOARD
+    board = np.array_split(numbers,3)
+    print(board)
+"""     try:
+        sudukoSolver.solve(board)
+    except:
+        pass
+    print(board)
+    flatList = []
+    for sublist in board:
+        for item in sublist:
+            flatList.append(item)
+    solvedNumbers =flatList*posArray
+    imgSolvedDigits= displayNumbers(imgSolvedDigits,solvedNumbers) """
 
-    #j = 161
-    #Save images for dataset
-    #for i in range(9):
-    #    cv2.imwrite('images/'+str(j)+'.jpg', boxes[i])
-    #    j=j+1 
-       #cv2.imshow("Sample"+str(i),boxes[i])
-
+#cv2.imshow("test", imgDetectedDigits)
 imageArray = ([img,imgThreshold,imgContours,imgBigContour],
                 [imgWarpColored, imgBlank,imgBlank,imgBlank])
 stackedImage = stackImages(imageArray, 1)
