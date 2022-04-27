@@ -3,34 +3,42 @@ import numpy as np
 import pickle
 
 def intializePredectionModel():
-    #model = load_model('Resources/myModel.h5')
+    """Prepares the trained model
+
+    Returns:
+        model: trained model to identify cubes, cylinders or empty
+    """    
     pickle_in = open("model_trained.p","rb")
     model = pickle.load(pickle_in)
     return model
-#### 1 - Preprocessing Image
-def preProcess(img):
-    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # CONVERT IMAGE TO GRAY SCALE
-    imgBlur = cv2.GaussianBlur(imgGray, (5, 5), 1)  # ADD GAUSSIAN BLUR
-    imgThreshold = cv2.adaptiveThreshold(imgBlur, 255, 1, 1, 11, 2)  # APPLY ADAPTIVE THRESHOLD
-    return imgThreshold
+    
+def preProcessHSV(img:np.array):
+    """Preprocess image to detect the board
 
-def preProcessHSV(img):
-    #greenLower = (40, 0, 0)
-    #greenUpper = (255, 255, 255)
+    Args:
+        img (np.array): numpy array with image
+
+    Returns:
+        np.array: array with hsv masked image
+    """   
     kernel = np.ones((5,5), np.uint8)
-    #greenLower = (25, 0, 175)
-    #greenUpper = (70, 255, 255)
-    greenLower = (50, 0, 0)
-    greenUpper = (255, 255, 255)
+    lower = (50, 0, 0)
+    upper = (255, 255, 255)
     blurred = cv2.GaussianBlur(img, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-    imgThreshold = cv2.inRange(hsv, greenLower, greenUpper)
+    imgThreshold = cv2.inRange(hsv, lower, upper)
     imgThreshold = cv2.morphologyEx(imgThreshold, cv2.MORPH_CLOSE, kernel)
     return imgThreshold
 
+def reorder(myPoints:np.array):
+    """Reorder points for the Warp Perspective
 
-#### 2 - Reorder points for Warp Perspective
-def reorder(myPoints):
+    Args:
+        myPoints (np.array): array with the points
+
+    Returns:
+        np.array: array with the new points in order
+    """    
     myPoints = myPoints.reshape((4, 2))
     myPointsNew = np.zeros((4, 1, 2), dtype=np.int32)
     add = myPoints.sum(1)
@@ -41,9 +49,16 @@ def reorder(myPoints):
     myPointsNew[2] = myPoints[np.argmax(diff)]
     return myPointsNew
 
+def biggestContour(contours:list):
+    """Find the biggest contour, this will be the board
 
-#### 3 - FINDING THE BIGGEST COUNTOUR ASSUING THAT IS THE SUDUKO PUZZLE
-def biggestContour(contours):
+    Args:
+        contours (list): list with the contours found
+
+    Returns:
+        np.array: biggest contour
+        int     : max area
+    """    
     biggest = np.array([])
     max_area = 0
     for i in contours:
@@ -56,9 +71,15 @@ def biggestContour(contours):
                 max_area = area
     return biggest,max_area
 
+def splitBoxes(img:np.array):
+    """Split the image into 9 images
 
-#### 4 - TO SPLIT THE IMAGE INTO 9 DIFFRENT IMAGES
-def splitBoxes(img):
+    Args:
+        img (np.array): np array with the image to split
+
+    Returns:
+        list: list with the 9 boxes of the board
+    """    
     rows = np.vsplit(img,3)
     boxes=[]
     for r in rows:
@@ -66,7 +87,6 @@ def splitBoxes(img):
         for box in cols:
             boxes.append(box)
     return boxes
-
 
 #### 6 - TO STACK ALL THE IMAGES IN ONE WINDOW
 def stackImages(imgArray,scale):
@@ -98,72 +118,43 @@ def stackImages(imgArray,scale):
     return ver
 
 
-#### PREPORCESSING FUNCTION
-def preProcessing(img):
+def preProcessing(img:np.array):
+    """Preprocess the image to input into the predictor
+
+    Args:
+        img (np.array): array with the image to predict
+
+    Returns:
+        np.array: image preprossed to be predicted
+    """    
+    img = np.asarray(img)
+    img = cv2.resize(img, (32, 32))
     img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     img = cv2.equalizeHist(img)
     img = img/255
+    img = img.reshape(1, 32, 32, 1)
     return img
 
+def getPredection(boxes:list,model):
+    """get the prediction of the selected box
 
+    Args:
+        boxes (list): list with the 9 boxes to predict
+        model (_type_): model that makes the predictions
 
-
-#### 4 - GET PREDECTIONS ON ALL IMAGES
-def getPredection(boxes,model):
+    Returns:
+        list: contains the order of the predicttions in the 9 boxes
+    """    
     result = []
-    for image in boxes:
-        ## PREPARE IMAGE
-        img = np.asarray(image)
-        img = cv2.resize(img, (32, 32))
+    for img in boxes:
         img = preProcessing(img)
-        img = img.reshape(1, 32, 32, 1)
-        ## GET PREDICTION
         predictions = model.predict(img)
         classIndex  = np.argmax(predictions,axis=1)
         probabilityValue = np.amax(predictions)
-        ## SAVE TO RESULT
         if probabilityValue > 0.8:
             result.append(classIndex[0])
         else:
             result.append(0)
     return result
 
-#### 6 -  TO DISPLAY THE SOLUTION ON THE IMAGE
-def displayNumbers(img,numbers,color = (0,255,0)):
-    secW = int(img.shape[1]/3)
-    secH = int(img.shape[0]/3)
-    for x in range (0,3):
-        for y in range (0,3):
-            if numbers[(y*3)+x] != 0 :
-                 cv2.putText(img, str(numbers[(y*3)+x]),
-                               (x*secW+int(secW/2)-10, int((y+0.8)*secH)), cv2.FONT_HERSHEY_COMPLEX_SMALL,
-                            2, color, 2, cv2.LINE_AA)
-    return 
 
-
-def findObject(object:str, hsv, frame):
-    if (object == "cube"):
-        lower_range = np.array([0, 120, 190])
-        upper_range = np.array([60, 255, 255])
-        color = (0,255,0)
-    else:
-        lower_range = np.array([[55, 40, 160]])
-        upper_range = np.array([85, 255, 255])
-        color = (255,0,0)
-    mask = cv2.inRange(hsv, lower_range, upper_range)
-    mask = cv2.erode(mask, None, iterations=2)
-    mask = cv2.dilate(mask, None, iterations=2)
-    cent , _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    cv2.drawContours(frame,cent,-1,color,3)
-
-    for (i,c) in enumerate(cent):
-        M= cv2.moments(c)
-        cx= int(M['m10']/M['m00'])
-        cy= int(M['m01']/M['m00'])
-        x,y,w,h= cv2.boundingRect(c)
-        cv2.putText(frame, text= object, org=(cx-10,y+30),
-                fontFace= cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5, color=(0,0,0),
-                thickness=1, lineType=cv2.LINE_AA)
-
-    count = (len(cent))
-    print(object+":",count)  
