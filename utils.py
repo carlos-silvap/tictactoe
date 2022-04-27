@@ -2,6 +2,34 @@ import cv2
 import numpy as np
 import pickle
 
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg._compressed_image import CompressedImage
+import time
+
+class RosCameraSubscriber(Node, ):
+    """ROS node subscribing to the image topics."""
+
+    def __init__(self, node_name: str, side: str) -> None:
+        """Set up the node.
+        Subscribe to the requested image topic (either /left_image or /right_image).
+        """
+        super().__init__(node_name=node_name)
+
+        self.camera_sub = self.create_subscription(CompressedImage, side + '_image', 
+            self.on_image_update, 1, )
+
+        self.cam_img = None
+
+    def on_image_update(self, msg):
+        """Get data from image. Callback for "/'side'_image "subscriber."""
+        data = np.frombuffer(msg.data.tobytes(), dtype=np.uint8)
+        self.cam_img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+    def update_image(self):
+        """Get the last image by spinning the node."""
+        rclpy.spin_once(self)
+
 def intializePredectionModel():
     """Prepares the trained model
 
@@ -22,12 +50,15 @@ def preProcessHSV(img:np.array):
         np.array: array with hsv masked image
     """   
     kernel = np.ones((5,5), np.uint8)
-    lower = (50, 0, 0)
+    #lower = (50, 0, 0)
+    #upper = (255, 255, 255)
+    lower = (0, 70, 0)
     upper = (255, 255, 255)
     blurred = cv2.GaussianBlur(img, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     imgThreshold = cv2.inRange(hsv, lower, upper)
-    imgThreshold = cv2.morphologyEx(imgThreshold, cv2.MORPH_CLOSE, kernel)
+    imgThreshold = cv2.dilate(imgThreshold,kernel,iterations = 1)
+    #imgThreshold = cv2.morphologyEx(imgThreshold, cv2.MORPH_CLOSE, kernel)
     return imgThreshold
 
 def reorder(myPoints:np.array):
