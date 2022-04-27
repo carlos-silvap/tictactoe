@@ -5,7 +5,7 @@ import imutils
 import argparse
 
 from collections import deque
-from reachy_sdk import ReachySDK
+#from reachy_sdk import ReachySDK
 
 #ROS libraries
 import rclpy
@@ -134,6 +134,7 @@ def main():
         findObject("cube", hsv, frame)
         findObject("cylinder", hsv, frame)
         cv2.imshow("Frame", frame)
+  
     
 
 

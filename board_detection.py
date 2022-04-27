@@ -16,7 +16,7 @@ from sensor_msgs.msg._compressed_image import CompressedImage
 import cv2 as cv
 
 #Define Reachy and get IP
-reachy = ReachySDK('localhost')  
+#reachy = ReachySDK('localhost')  
 
 
 
@@ -54,11 +54,13 @@ def main():
     arguments = vars(parser.parse_args())
     
     #Initial position of the head
-    reachy.turn_on('head')
+    #reachy.turn_on('head')
     
     #Parameters for tracking the defined color
     greenLower = (89, 0, 162)
     greenUpper = (255, 107, 224)
+    greenLower = (90, 10, 160)
+    greenUpper = (255, 100, 255)
     
     pts = deque(maxlen=arguments["buffer"])
     
@@ -132,7 +134,7 @@ def main():
                 continue
         # show the frame to our screen
         cv.imshow("Frame", frame)
-    
+        cv.imshow("Mask", mask)
 
 
         
