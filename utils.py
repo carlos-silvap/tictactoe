@@ -4,8 +4,12 @@ import pickle
 
 import rclpy
 from rclpy.node import Node
+
 from sensor_msgs.msg._compressed_image import CompressedImage
-import time
+from reachy_sdk import ReachySDK
+from reachy_sdk.trajectory import goto
+from reachy_sdk.trajectory.interpolation import InterpolationMode
+
 
 class RosCameraSubscriber(Node, ):
     """ROS node subscribing to the image topics."""
@@ -36,7 +40,7 @@ def intializePredectionModel():
     Returns:
         model: trained model to identify cubes, cylinders or empty
     """    
-    pickle_in = open("model_trained.p","rb")
+    pickle_in = open("models/model_trained_new.p","rb")
     model = pickle.load(pickle_in)
     return model
     
@@ -52,8 +56,10 @@ def preProcessHSV(img:np.array):
     kernel = np.ones((5,5), np.uint8)
     #lower = (50, 0, 0)
     #upper = (255, 255, 255)
-    lower = (0, 70, 0)
+    lower = (0, 65, 120)
     upper = (255, 255, 255)
+    #lower = (0, 50, 180)
+    #upper = (255, 255, 255)
     blurred = cv2.GaussianBlur(img, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     imgThreshold = cv2.inRange(hsv, lower, upper)
