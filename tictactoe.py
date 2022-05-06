@@ -237,7 +237,7 @@ class PlaygroundTicTacToe():
         # Goto base position
         self.goto_base_position() 
         self.reachy.r_arm.r_gripper.goal_position = -10 #open the gripper 
-        path = f'/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_nemo/grab_{grab_index}.npz'
+        path = f'/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/grab_{grab_index}.npz'
         self.goto_position(path)
         time.sleep(1)
         self.reachy.r_arm.r_gripper.compliant = False 
@@ -256,32 +256,77 @@ class PlaygroundTicTacToe():
             )
 
         # Lift it
-        path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_nemo/lift.npz'
+        path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/lift.npz'
         self.goto_position(path)
         time.sleep(0.1)
 
         # Put it in box_index
 
-        path = f'/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_nemo/put_{box_index}.npz'
+        path = f'/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/put_{box_index}.npz'
         self.trajectoryPlayer(path)
         time.sleep(1)
         self.reachy.r_arm.r_gripper.compliant = False
         self.reachy.r_arm.r_gripper.goal_position = -10
         time.sleep(1)
 
-        path = f'/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_nemo/back_{box_index}_upright.npz'
+        path = f'/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/back_{box_index}_upright.npz'
         self.goto_position(path)
 
 
         if box_index in (8, 9):
 
-            path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_nemo/back_to_back.npz'
+            path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/back_to_back.npz'
             self.goto_position(path)
 
-        path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_nemo/back_rest.npz'
+        path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/back_rest.npz'
         self.goto_position(path)
 
         self.goto_rest_position()
+
+    def get_winner(self, board):
+        win_configurations = (
+            (0, 1, 2),
+            (3, 4, 5),
+            (6, 7, 8),
+
+            (0, 3, 6),
+            (1, 4, 7),
+            (2, 5, 8),
+
+            (0, 4, 8),
+            (2, 4, 6),
+        )
+
+        for c in win_configurations:
+            trio = set(board[i] for i in c)
+            for id in range(3):
+                if trio == set([id]):
+                    winner = id
+                    if winner in (1, 2):
+                        return winner
+
+        return 'nobody'
+
+    def rest(self, duration=1.0):
+        self.reachy.turn_on('r_arm')
+        time.sleep(0.1)
+        goto(
+            goal_positions=
+                    {self.reachy.r_arm.r_shoulder_pitch: 55,
+                    self.reachy.r_arm.r_shoulder_roll: -15,
+                    self.reachy.r_arm.r_arm_yaw: 0,
+                    self.reachy.r_arm.r_elbow_pitch: -85,
+                    self.reachy.r_arm.r_forearm_yaw: -10,
+                    self.reachy.r_arm.r_wrist_pitch: -50,
+                    self.reachy.r_arm.r_wrist_roll: 0},
+                duration=1.0,
+                interpolation_mode=InterpolationMode.MINIMUM_JERK
+            )
+        time.sleep(0.1)
+        self.reachy.r_arm.r_shoulder_pitch.torque_limit = 75
+        self.reachy.r_arm.r_elbow_pitch.torque_limit = 75
+
+
 
 board = PlaygroundTicTacToe()
 #board.live_view()
@@ -298,20 +343,27 @@ board = PlaygroundTicTacToe()
 #print(action)
 
 
-for i in range(9):
+for i in range(5):
     state = board.get_board()
-    state_m  = np.where(state == 1, 3, state)
-    state_m  = np.where(state_m == 2, 1, state_m)
-    state_m  = np.where(state_m == 3, 2, state_m)
-    game = state_m[::-1]
-    game = np.array_split(game,3)
-    print(game[0])
-    print(game[1])
-    print(game[2])
-    print('     ')
-    print('     ')
+    winner = board.get_winner(state)
+    if winner == 'nobody':
+        state_m  = np.where(state == 1, 3, state)
+        state_m  = np.where(state_m == 2, 1, state_m)
+        state_m  = np.where(state_m == 3, 2, state_m)
+        #game = state_m[::-1]
+        game = np.array_split(state_m,3)
+        print(game[0])
+        print(game[1])
+        print(game[2])
+        print('     ')
+        print('     ')
 
-    action = - board.choose_next_action(state_m)[0] +9
-    board.play_pawn(1,action)
-    time.sleep(2)
-    
+        action = - board.choose_next_action(state_m)[0] +9
+        board.play_pawn(1,action)
+        time.sleep(2)
+    else:
+        board.goto_rest_position()
+        board.rest()
+        board.reachy.turn_off('r_arm')
+        break
+

@@ -56,7 +56,7 @@ def preProcessHSV(img:np.array):
     kernel = np.ones((5,5), np.uint8)
     #lower = (50, 0, 0)
     #upper = (255, 255, 255)
-    lower = (0, 65, 120)
+    lower = (0, 60, 180)
     upper = (255, 255, 255)
     #lower = (0, 50, 180)
     #upper = (255, 255, 255)
