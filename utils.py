@@ -40,11 +40,11 @@ def intializePredectionModel():
     Returns:
         model: trained model to identify cubes, cylinders or empty
     """    
-    pickle_in = open("models/model_trained_new.p","rb")
+    pickle_in = open("models/model_trained_new_lights.p","rb")
     model = pickle.load(pickle_in)
     return model
     
-def preProcessHSV(img:np.array):
+def preProcessHSV(img:np.array, lowS, lowV):
     """Preprocess image to detect the board
 
     Args:
@@ -56,7 +56,7 @@ def preProcessHSV(img:np.array):
     kernel = np.ones((5,5), np.uint8)
     #lower = (50, 0, 0)
     #upper = (255, 255, 255)
-    lower = (0, 60, 180)
+    lower = (0, lowS, lowV)
     upper = (255, 255, 255)
     #lower = (0, 50, 180)
     #upper = (255, 255, 255)
@@ -193,5 +193,4 @@ def getPredection(boxes:list,model):
         else:
             result.append(0)
     return result
-
 

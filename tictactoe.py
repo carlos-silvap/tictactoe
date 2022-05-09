@@ -6,22 +6,14 @@ from rl_agent import *
 model = intializePredectionModel()  # LOAD THE CNN MODEL
 heightImg = 300
 widthImg = 300
+lowS = 80
+lowV = 180
 
 class PlaygroundTicTacToe():
     def __init__(self):
-        self.reachy = ReachySDK('localhost')
         rclpy.init()
         time.sleep(2)
         self.image_getter = RosCameraSubscriber(node_name='image_viewer', side = "right")
-
-    def setup(self):
-        self.reachy.turn_on('head')
-        self.reachy.head.look_at(x=1, y=0, z=0, duration=1.5) 
-        self.reachy.head.l_antenna.speed_limit = 50.0
-        self.reachy.head.r_antenna.speed_limit = 50.0
-        self.reachy.head.l_antenna.goal_position = 0
-        self.reachy.head.r_antenna.goal_position = 0
-        #self.goto_rest_position()
 
  # Playground and game functions
     def coin_flip(self):
@@ -37,7 +29,7 @@ class PlaygroundTicTacToe():
         
             #### 1. PREPARE THE IMAGE
             img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
-            imgThreshold = preProcessHSV(img)
+            imgThreshold = preProcessHSV(img, lowS, lowV)
 
 
             #### 2. FIND ALL COUNTOURS
@@ -76,16 +68,15 @@ class PlaygroundTicTacToe():
                 print(board[2])
                 print("      ")
                 print("      ")
-
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-    def get_board(self):
+    def get_board(self, lowS=40, lowV=170):
         self.image_getter.update_image()
         img = self.image_getter.cam_img
         img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
-        imgThreshold = preProcessHSV(img)
+        imgThreshold = preProcessHSV(img, lowS, lowV)
         contours, _ = cv2.findContours(imgThreshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            # FIND ALL CONTOURS
         biggest, _ = biggestContour(contours)                                                               # FIND THE BIGGEST CONTOUR
         if biggest.size != 0:
@@ -123,111 +114,106 @@ class PlaygroundTicTacToe():
 
         return best_action, value, actions
 
+    def get_winner(self, board):
+        win_configurations = (
+            (0, 1, 2),
+            (3, 4, 5),
+            (6, 7, 8),
 
-    def goto_base_position(self, duration=1.0):
- 
-        self.reachy.turn_on('r_arm')
+            (0, 3, 6),
+            (1, 4, 7),
+            (2, 5, 8),
 
-        time.sleep(0.1)
-        goto(
-            goal_positions=
-                    {self.reachy.r_arm.r_shoulder_pitch: 60,
-                    self.reachy.r_arm.r_shoulder_roll: -15,
-                    self.reachy.r_arm.r_arm_yaw: 0,
-                    self.reachy.r_arm.r_elbow_pitch: -95,
-                    self.reachy.r_arm.r_forearm_yaw: -15,
-                    self.reachy.r_arm.r_wrist_pitch: -50,
-                    self.reachy.r_arm.r_wrist_roll: 0},
-                duration=1.0,
-                interpolation_mode=InterpolationMode.MINIMUM_JERK
-            )
-        time.sleep(0.1)
-        self.reachy.r_arm.r_shoulder_pitch.torque_limit = 75
-        self.reachy.r_arm.r_elbow_pitch.torque_limit = 75
-
-    def goto_position(self, path): 
-        self.reachy.turn_on('r_arm')
-        move = np.load(path)
-        move.allow_pickle=1
-        listMoves = move['move'].tolist()
-        listTraj = {}
-        for key,val in listMoves.items():
-            listTraj[eval('self.'+key)] = float(val)
-        goto(
-            goal_positions=listTraj, 
-            duration=2.0,
-            interpolation_mode=InterpolationMode.MINIMUM_JERK
+            (0, 4, 8),
+            (2, 4, 6),
         )
 
-    def trajectoryPlayer(self , path):
-        self.reachy.turn_on('r_arm')
-        move = np.load(path)
-        move.allow_pickle=1
+        for c in win_configurations:
+            trio = set(board[i] for i in c)
+            for id in range(3):
+                if trio == set([id]):
+                    winner = id
+                    if winner in (1, 2):
+                        return winner
 
-        listMoves = move['move'].tolist()
-        listTraj = [ val for key,val in listMoves.items()]
-        listTraj = np.array(listTraj).T.tolist()
+        return 'nobody'
 
-        sampling_frequency = 100  #en hertz
+    def get_images(self, lowS=40, lowV=140):
+        self.image_getter.update_image()
+        img = self.image_getter.cam_img
+        img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
+        imgThreshold = preProcessHSV(img, lowS, lowV)
+        contours, _ = cv2.findContours(imgThreshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            # FIND ALL CONTOURS
+        biggest, _ = biggestContour(contours)                                                               # FIND THE BIGGEST CONTOUR
+        if biggest.size != 0:
+            biggest = reorder(biggest)
+            pts1 = np.float32(biggest)                                                                      # PREPARE POINTS FOR WARP
+            pts2 = np.float32([[0, 0],[widthImg, 0], [0, heightImg],[widthImg, heightImg]])                 # PREPARE POINTS FOR WARP
+            matrix = cv2.getPerspectiveTransform(pts1, pts2)                                                # GER
+            imgWarpColored = cv2.warpPerspective(img, matrix, (widthImg, heightImg))
+            boxes = splitBoxes(imgWarpColored)
+        return boxes
+
+    def calibrate_HSV(self):
+        def callback(x):
+            pass
+        #create trackbar window
+        cv2.namedWindow('image')
         
-        recorded_joints = []
-        for joint,val in listMoves.items():
-            if 'neck' in joint : 
-                fullName = 'self.'+ joint
-            elif 'r_' in joint: 
-                fullName = 'self.'+joint
-            elif 'l_' in joint: 
-                fullName = 'self.'+joint
-            recorded_joints.append(eval(fullName))
+        # initial limits
+        ilowH = 0
+        ihighH = 255
 
-        for joint in recorded_joints:
-            joint.compliant = False
+        ilowS = 0
+        ihighS = 255
 
-        first_point = dict(zip(recorded_joints, listTraj[0]))
-        goto(first_point, duration=3.0)
+        ilowV = 0
+        ihighV = 255
 
-        for joints_positions in listTraj:
-            for joint, pos in zip(recorded_joints, joints_positions):
-                joint.goal_position = pos
-            time.sleep(1 / sampling_frequency)
+        # create trackbars for color change
+        cv2.createTrackbar('lowH','image',ilowH,255,callback)
+        cv2.createTrackbar('highH','image',ihighH,255,callback)
 
-    def goto_rest_position(self, duration=1.0):
-        time.sleep(0.1)
-        self.reachy.head.look_at(x=1, y=0, z=0, duration=1) 
-        self.goto_base_position(0.6 * duration)
-        time.sleep(0.1)
+        cv2.createTrackbar('lowS','image',ilowS,255,callback)
+        cv2.createTrackbar('highS','image',ihighS,255,callback)
 
-        self.reachy.turn_on('r_arm')
+        cv2.createTrackbar('lowV','image',ilowV,255,callback)
+        cv2.createTrackbar('highV','image',ihighV,255,callback)
 
-
-        goto(
-            goal_positions=
-                    {self.reachy.r_arm.r_shoulder_pitch: 50,
-                    self.reachy.r_arm.r_shoulder_roll: -15,
-                    self.reachy.r_arm.r_arm_yaw: 0,
-                    self.reachy.r_arm.r_elbow_pitch: -100,
-                    self.reachy.r_arm.r_forearm_yaw: -15,
-                    self.reachy.r_arm.r_wrist_pitch: -60,
-                    self.reachy.r_arm.r_wrist_roll: 0},
-                duration=1.0,
-                interpolation_mode=InterpolationMode.MINIMUM_JERK
-            )
         time.sleep(1)
 
+        while True:
+            self.image_getter.update_image()
+            frame = self.image_getter.cam_img
+            #Display robot's view
+            cv2.imshow('View', frame)
+            
+            #Get trackbar positions
+            ilowH = cv2.getTrackbarPos('lowH', 'image')
+            ihighH = cv2.getTrackbarPos('highH', 'image')
+            ilowS = cv2.getTrackbarPos('lowS', 'image')
+            ihighS = cv2.getTrackbarPos('highS', 'image')
+            ilowV = cv2.getTrackbarPos('lowV', 'image')
+            ihighV = cv2.getTrackbarPos('highV', 'image')
+            #Read frame
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            cv2.imshow('hsv', hsv)
+            lower_hsv = np.array([ilowH, ilowS, ilowV])
+            higher_hsv = np.array([ihighH, ihighS, ihighV])
+            mask = cv2.inRange(hsv, lower_hsv, higher_hsv)
+            cv2.imshow('mask', mask)
+            #print (ilowH, ilowS, ilowV)
+            #print (ihighH, ihighS, ihighV)
+            
+            
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        return ilowS,ilowV
 
-        time.sleep(0.25)
-
-        self.reachy.r_arm.r_shoulder_roll.comliant = True
-        self.reachy.r_arm.r_arm_yaw.comliant = True
-        self.reachy.r_arm.r_elbow_pitch.comliant = True
-        self.reachy.r_arm.r_forearm_yaw.comliant = True
-        self.reachy.r_arm.r_wrist_pitch.comliant = True
-        self.reachy.r_arm.r_wrist_roll.comliant = True
-        self.reachy.r_arm.r_gripper.comliant = True
-
-        #self.reachy.turn_off('r_arm')
-
-        time.sleep(0.25)
+class Robot():
+    def __init__(self) -> None:
+        self.reachy = ReachySDK('localhost')
+    
 
     def play_pawn(self, grab_index, box_index):
         self.reachy.r_arm.r_gripper.speed_limit = 80
@@ -283,29 +269,76 @@ class PlaygroundTicTacToe():
 
         self.goto_rest_position()
 
-    def get_winner(self, board):
-        win_configurations = (
-            (0, 1, 2),
-            (3, 4, 5),
-            (6, 7, 8),
+    def goto_rest_position(self, duration=1.0):
+        time.sleep(0.1)
+        self.reachy.head.look_at(x=1, y=0, z=0, duration=1) 
+        self.goto_base_position(0.6 * duration)
+        time.sleep(0.1)
 
-            (0, 3, 6),
-            (1, 4, 7),
-            (2, 5, 8),
+        self.reachy.turn_on('r_arm')
 
-            (0, 4, 8),
-            (2, 4, 6),
+    def goto_base_position(self, duration=1.0):
+ 
+        self.reachy.turn_on('r_arm')
+
+        time.sleep(0.1)
+        goto(
+            goal_positions=
+                    {self.reachy.r_arm.r_shoulder_pitch: 60,
+                    self.reachy.r_arm.r_shoulder_roll: -15,
+                    self.reachy.r_arm.r_arm_yaw: 0,
+                    self.reachy.r_arm.r_elbow_pitch: -95,
+                    self.reachy.r_arm.r_forearm_yaw: -15,
+                    self.reachy.r_arm.r_wrist_pitch: -50,
+                    self.reachy.r_arm.r_wrist_roll: 0},
+                duration=1.0,
+                interpolation_mode=InterpolationMode.MINIMUM_JERK
+            )
+        time.sleep(0.1)
+        self.reachy.r_arm.r_shoulder_pitch.torque_limit = 75
+        self.reachy.r_arm.r_elbow_pitch.torque_limit = 75
+
+    def goto_position(self, path): 
+        self.reachy.turn_on('r_arm')
+        move = np.load(path)
+        move.allow_pickle=1
+        listMoves = move['move'].tolist()
+        listTraj = {}
+        for key,val in listMoves.items():
+            listTraj[eval('self.'+key)] = float(val)
+        goto(
+            goal_positions=listTraj, 
+            duration=2.0,
+            interpolation_mode=InterpolationMode.MINIMUM_JERK
         )
 
-        for c in win_configurations:
-            trio = set(board[i] for i in c)
-            for id in range(3):
-                if trio == set([id]):
-                    winner = id
-                    if winner in (1, 2):
-                        return winner
+    def trajectoryPlayer(self,path):
+        self.reachy.turn_on('r_arm')
+        move = np.load(path)
+        move.allow_pickle=1
+        listMoves = move['move'].tolist()
+        listTraj = [val for key,val in listMoves.items()]
+        listTraj = np.array(listTraj).T.tolist()
 
-        return 'nobody'
+        sampling_frequency = 100  #en hertz
+
+        recorded_joints = []
+        for joint,val in listMoves.items():
+            if 'neck' in joint : 
+                fullName = 'self.' + joint
+            elif 'r_' in joint: 
+                fullName = 'self.' + joint
+            elif 'l_' in joint: 
+                fullName = 'self.' + joint
+            recorded_joints.append(eval(fullName))
+            
+        first_point = dict(zip(recorded_joints, listTraj[0]))
+        goto(first_point, duration=3.0)
+
+        for joints_positions in listTraj:
+            for joint, pos in zip(recorded_joints, joints_positions):
+                joint.goal_position = pos
+            time.sleep(1 / sampling_frequency)
 
     def rest(self, duration=1.0):
         self.reachy.turn_on('r_arm')
@@ -327,43 +360,52 @@ class PlaygroundTicTacToe():
         self.reachy.r_arm.r_elbow_pitch.torque_limit = 75
 
 
-
 board = PlaygroundTicTacToe()
+robot = Robot()
+#lowS, lowV = board.calibrate_HSV()
 #board.live_view()
-#state = board.get_board()
-#print(state[::-1])
-#state_m  = np.where(state == 1, 3, state)
-#state_m  = np.where(state_m == 2, 1, state_m)
-#state_m  = np.where(state_m == 3, 2, state_m)
 
-#board.play_pawn(1,1)
-#print(state_m)
-#print(board.choose_next_action(state_m))
-#action = - board.choose_next_action(state_m)[0] +9
-#print(action)
+option='2'
+if option=='1':
 
-
-for i in range(5):
-    state = board.get_board()
-    winner = board.get_winner(state)
-    if winner == 'nobody':
-        state_m  = np.where(state == 1, 3, state)
-        state_m  = np.where(state_m == 2, 1, state_m)
-        state_m  = np.where(state_m == 3, 2, state_m)
-        #game = state_m[::-1]
-        game = np.array_split(state_m,3)
-        print(game[0])
-        print(game[1])
-        print(game[2])
-        print('     ')
-        print('     ')
-
-        action = - board.choose_next_action(state_m)[0] +9
-        board.play_pawn(1,action)
-        time.sleep(2)
-    else:
-        board.goto_rest_position()
-        board.rest()
-        board.reachy.turn_off('r_arm')
-        break
-
+    j = 897
+        #Save images for dataset
+    for i in range(9):
+        boxes = board.get_images()
+        cv2.imwrite('images/new/'+str(j)+'.jpg', boxes[i])
+        j=j+1 
+        
+elif option=='2':
+    for i in range(1):
+        state = board.get_board()
+        winner = board.get_winner(state)
+        print(winner)
+        if winner == 'nobody':
+            #game = state[::-1]
+            
+            #game= np.where(state == 1, 3, state)
+            #game= np.where(state == 2, 1, state)
+            #game= np.where(state == 3, 2, state)
+            print(state)
+            
+            game = np.array_split(state,3)
+            print(game[0])
+            print(game[1])
+            print(game[2])
+            print('     ')
+            print('     ')
+            
+            action =  -board.choose_next_action(state)[0]+9
+            print(action)
+            #robot.play_pawn(1,action)
+            time.sleep(2)
+        elif winner==1:
+            print('Human won')
+        else:
+            print('Robot won')
+    #robot.reachy.turn_off_smoothly('r_arm')
+else:
+    boardd = [2, 1, 0, 0, 2, 0, 1, 0, 0]
+    action =  board.choose_next_action(boardd)
+    print(board)
+    print(action)
