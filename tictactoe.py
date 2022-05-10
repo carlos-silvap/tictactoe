@@ -1,13 +1,11 @@
-print('Setting UP')
 from utils import *
 import time
 from rl_agent import *
 
-model = intializePredectionModel()  # LOAD THE CNN MODEL
-heightImg = 300
-widthImg = 300
-lowS = 80
-lowV = 180
+model       = intializePredectionModel()  
+heightImg   = 300
+widthImg    = 300
+
 
 class PlaygroundTicTacToe():
     def __init__(self):
@@ -72,7 +70,7 @@ class PlaygroundTicTacToe():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-    def get_board(self, lowS=40, lowV=170):
+    def get_board(self, lowS, lowV):
         self.image_getter.update_image()
         img = self.image_getter.cam_img
         img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
@@ -138,7 +136,7 @@ class PlaygroundTicTacToe():
 
         return 'nobody'
 
-    def get_images(self, lowS=40, lowV=140):
+    def get_images(self, lowS, lowV):
         self.image_getter.update_image()
         img = self.image_getter.cam_img
         img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
@@ -208,12 +206,40 @@ class PlaygroundTicTacToe():
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+                
+            file1 = open("hsv.txt","w")
+            L = [str(ilowS)+' '+str(ilowV)] 
+            file1.writelines(L)
+            file1.close() 
         return ilowS,ilowV
+
+    def get_HSV(self):
+        given_file = open('hsv.txt', 'r')
+
+        lines = given_file.readlines()
+        vals = []
+        for line in lines:
+            for word in line.split():
+                    vals.append(int(word))
+        ls = vals[0]
+        lv = vals[1]
+        given_file.close()
+        return ls, lv
+
+    def incoherent_board_detected(self, board):
+        nb_cubes = len(np.where(board == 2)[0])
+        nb_cylinders = len(np.where(board == 1)[0])
+
+        if abs(nb_cubes - nb_cylinders) <= 1:
+            return False
+        else : 
+            return True
 
 class Robot():
     def __init__(self) -> None:
         self.reachy = ReachySDK('localhost')
-    
+        for f in self.reachy.fans.values():
+            f.on()
 
     def play_pawn(self, grab_index, box_index):
         self.reachy.r_arm.r_gripper.speed_limit = 80
@@ -224,7 +250,7 @@ class Robot():
         self.goto_base_position() 
         self.reachy.r_arm.r_gripper.goal_position = -10 #open the gripper 
         path = f'/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/grab_{grab_index}.npz'
-        self.goto_position(path)
+        self.trajectoryPlayer(path)
         time.sleep(1)
         self.reachy.r_arm.r_gripper.compliant = False 
         self.reachy.r_arm.r_gripper.goal_position = 13 #close the gripper to take the cylinder 
@@ -359,53 +385,92 @@ class Robot():
         self.reachy.r_arm.r_shoulder_pitch.torque_limit = 75
         self.reachy.r_arm.r_elbow_pitch.torque_limit = 75
 
+    def happy(self):    
+        self.reachy.joints.l_antenna.speed_limit = 0.0
+        self.reachy.joints.r_antenna.speed_limit = 0.0
+        
+        
+        for _ in range(9):
+            self.reachy.joints.l_antenna.goal_position = 10.0
+            self.reachy.joints.r_antenna.goal_position = -10.0
+
+            time.sleep(0.1)
+
+            self.reachy.joints.l_antenna.goal_position = -10.0
+            self.reachy.joints.r_antenna.goal_position = 10.0
+
+            time.sleep(0.1)
+        
+        self.reachy.joints.l_antenna.goal_position = 0.0
+        self.reachy.joints.r_antenna.goal_position = 0.0
+        time.sleep(1)
+
+    def sad(reachy):
+        pos = [
+            (-0.5, 150),
+            (-0.4, 110),
+            (-0.5, 150),
+            (-0.4, 110),
+            (-0.5, 150),
+            (0, 90),
+            (0, 20),
+        ]
+
+        for (z, antenna_pos) in pos:
+            reachy.head.look_at(0.5, 0.0, z, duration=1.0)
+            #TC reachy.goto({
+            #    'head.left_antenna': antenna_pos,#changer
+            #    'head.right_antenna': -antenna_pos,
+            #}, duration=1.5, wait=True, interpolation_mode='minjerk')
+            reachy.joints.l_antenna.goal_position = antenna_pos
+            reachy.joints.r_antenna.goal_position = -antenna_pos
+
+
 
 board = PlaygroundTicTacToe()
 robot = Robot()
+lowS, lowV = board.get_HSV()
+
 #lowS, lowV = board.calibrate_HSV()
 #board.live_view()
 
-option='2'
-if option=='1':
+i = 1
+while (True):
+    
+    state = board.get_board(lowS, lowV)
+    winner = board.get_winner(state)
+    
+    if winner == 'nobody':
 
-    j = 897
-        #Save images for dataset
-    for i in range(9):
-        boxes = board.get_images()
-        cv2.imwrite('images/new/'+str(j)+'.jpg', boxes[i])
-        j=j+1 
+        if (board.incoherent_board_detected(state)):
+            double_check_board = board.get_board(lowS, lowV)
+            if np.any(double_check_board != state):
+                print("RESTART") 
+                #tictactoe_playground.shuffle_board()
+                break
+
+        game_inv = state[::-1]
+        game_inv = np.array_split(game_inv,3)
+        print(game_inv[0])
+        print(game_inv[1])
+        print(game_inv[2])
+        print('       ')
         
-elif option=='2':
-    for i in range(1):
-        state = board.get_board()
-        winner = board.get_winner(state)
-        print(winner)
-        if winner == 'nobody':
-            #game = state[::-1]
-            
-            #game= np.where(state == 1, 3, state)
-            #game= np.where(state == 2, 1, state)
-            #game= np.where(state == 3, 2, state)
-            print(state)
-            
-            game = np.array_split(state,3)
-            print(game[0])
-            print(game[1])
-            print(game[2])
-            print('     ')
-            print('     ')
-            
-            action =  -board.choose_next_action(state)[0]+9
-            print(action)
-            #robot.play_pawn(1,action)
-            time.sleep(2)
-        elif winner==1:
-            print('Human won')
-        else:
-            print('Robot won')
-    #robot.reachy.turn_off_smoothly('r_arm')
-else:
-    boardd = [2, 1, 0, 0, 2, 0, 1, 0, 0]
-    action =  board.choose_next_action(boardd)
-    print(board)
-    print(action)
+        action =  - board.choose_next_action(state)[0] + 9
+        robot.play_pawn(i,action)
+        time.sleep(2)
+        
+        i = i + 1 
+    elif winner==1:
+        print('Robot won')
+        robot.reachy.turn_on('reachy')
+        robot.happy()
+        break
+    else:
+        print('Human won')
+        robot.reachy.turn_on('reachy')
+        robot.sad()
+        break
+
+robot.rest()
+robot.reachy.turn_off('reachy')

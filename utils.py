@@ -40,7 +40,8 @@ def intializePredectionModel():
     Returns:
         model: trained model to identify cubes, cylinders or empty
     """    
-    pickle_in = open("models/model_trained_new_lights.p","rb")
+    pickle_in = open("models/model_v1.p","rb")
+    #pickle_in = open("models/model_trained_new_lights.p","rb")
     model = pickle.load(pickle_in)
     return model
     
@@ -54,17 +55,12 @@ def preProcessHSV(img:np.array, lowS, lowV):
         np.array: array with hsv masked image
     """   
     kernel = np.ones((5,5), np.uint8)
-    #lower = (50, 0, 0)
-    #upper = (255, 255, 255)
     lower = (0, lowS, lowV)
     upper = (255, 255, 255)
-    #lower = (0, 50, 180)
-    #upper = (255, 255, 255)
     blurred = cv2.GaussianBlur(img, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     imgThreshold = cv2.inRange(hsv, lower, upper)
     imgThreshold = cv2.dilate(imgThreshold,kernel,iterations = 1)
-    #imgThreshold = cv2.morphologyEx(imgThreshold, cv2.MORPH_CLOSE, kernel)
     return imgThreshold
 
 def reorder(myPoints:np.array):
@@ -125,7 +121,6 @@ def splitBoxes(img:np.array):
             boxes.append(box)
     return boxes
 
-#### 6 - TO STACK ALL THE IMAGES IN ONE WINDOW
 def stackImages(imgArray,scale):
     rows = len(imgArray)
     cols = len(imgArray[0])
@@ -153,7 +148,6 @@ def stackImages(imgArray,scale):
         hor_con= np.concatenate(imgArray)
         ver = hor
     return ver
-
 
 def preProcessing(img:np.array):
     """Preprocess the image to input into the predictor
