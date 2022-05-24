@@ -2,6 +2,10 @@ from utils import *
 import time
 from rl_agent import *
 
+from reachy_sdk import ReachySDK
+from reachy_sdk.trajectory import goto
+from reachy_sdk.trajectory.interpolation import InterpolationMode
+
 model       = intializePredectionModel()  
 heightImg   = 300
 widthImg    = 300
@@ -12,6 +16,8 @@ class PlaygroundTicTacToe():
         rclpy.init()
         time.sleep(2)
         self.image_getter = RosCameraSubscriber(node_name='image_viewer', side = "right")
+        
+
 
     def reset(self):
         self.pawn_played = 0
@@ -32,7 +38,7 @@ class PlaygroundTicTacToe():
         
             #### 1. PREPARE THE IMAGE
             img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
-            imgThreshold = preProcessHSV(img, lowS, lowV)
+            imgThreshold = preProcessHSV(img, low, high)
 
 
             #### 2. FIND ALL COUNTOURS
@@ -46,8 +52,6 @@ class PlaygroundTicTacToe():
 
             if biggest.size != 0:
                 biggest = reorder(biggest)
-                print(maxArea)
-                #print(biggest)
                 cv2.drawContours(imgBigContour, biggest, -1, (0, 0, 255), 25)                                   # DRAW THE BIGGEST CONTOUR
                 pts1 = np.float32(biggest)                                                                      # PREPARE POINTS FOR WARP
                 pts2 = np.float32([[0, 0],[widthImg, 0], [0, heightImg],[widthImg, heightImg]])                 # PREPARE POINTS FOR WARP
@@ -77,25 +81,28 @@ class PlaygroundTicTacToe():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-    def get_board(self, lowS, lowV):
-        self.image_getter.update_image()
-        img = self.image_getter.cam_img
-        img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
-        imgThreshold = preProcessHSV(img, lowS, lowV)
-        contours, _ = cv2.findContours(imgThreshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            # FIND ALL CONTOURS
-        biggest, maxArea = biggestContour(contours)                                                               # FIND THE BIGGEST CONTOUR
-        if biggest.size != 0 and maxArea>25000:
-            biggest = reorder(biggest)
-            pts1 = np.float32(biggest)                                                                      # PREPARE POINTS FOR WARP
-            pts2 = np.float32([[0, 0],[widthImg, 0], [0, heightImg],[widthImg, heightImg]])                 # PREPARE POINTS FOR WARP
-            matrix = cv2.getPerspectiveTransform(pts1, pts2)                                                # GER
-            imgWarpColored = cv2.warpPerspective(img, matrix, (widthImg, heightImg))
-            boxes = splitBoxes(imgWarpColored)
-            numbers = getPredection(boxes, model)
-            numbers = np.asarray(numbers)
-            board = np.array_split(numbers,3)
+    def get_board(self, low, high):
+        boards = []
+        i = 0
+        for i in range(10):
+            self.image_getter.update_image()
+            img = self.image_getter.cam_img
+            img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
+            imgThreshold = preProcessHSV(img, low, high)
+            contours, _ = cv2.findContours(imgThreshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            # FIND ALL CONTOURS
+            biggest, maxArea = biggestContour(contours)                                                               # FIND THE BIGGEST CONTOUR
+            if biggest.size != 0 and maxArea>25000:
+                biggest = reorder(biggest)
+                pts1 = np.float32(biggest)                                                                      # PREPARE POINTS FOR WARP
+                pts2 = np.float32([[0, 0],[widthImg, 0], [0, heightImg],[widthImg, heightImg]])                 # PREPARE POINTS FOR WARP
+                matrix = cv2.getPerspectiveTransform(pts1, pts2)                                                # GER
+                imgWarpColored = cv2.warpPerspective(img, matrix, (widthImg, heightImg))
+                boxes = splitBoxes(imgWarpColored)
+                numbers = getPredection(boxes, model)
+                numbers = np.asarray(numbers)
+            #boards.append(numbers)
             return numbers
-        else:
+        else:   
             return None
 
     def choose_next_action(self, board):
@@ -209,18 +216,16 @@ class PlaygroundTicTacToe():
             higher_hsv = np.array([ihighH, ihighS, ihighV])
             mask = cv2.inRange(hsv, lower_hsv, higher_hsv)
             cv2.imshow('mask', mask)
-            #print (ilowH, ilowS, ilowV)
-            #print (ihighH, ihighS, ihighV)
-            
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
                 
-            file1 = open("hsv.txt","w")
-            L = [str(ilowS)+' '+str(ilowV)] 
-            file1.writelines(L)
-            file1.close() 
-        return ilowS,ilowV
+            file = open("hsv.txt","w")
+            L = [str(ilowH)+' '+str(ilowS)+' '+str(ilowV)+' ']
+            H = [str(ihighH)+' '+str(ihighS)+' '+str(ihighV)] 
+            file.writelines(L+H)
+            file.close()
+        return lower_hsv, higher_hsv
 
     def get_HSV(self):
         given_file = open('hsv.txt', 'r')
@@ -230,10 +235,10 @@ class PlaygroundTicTacToe():
         for line in lines:
             for word in line.split():
                     vals.append(int(word))
-        ls = vals[0]
-        lv = vals[1]
+        l = vals[0], vals[1], vals[2]
+        h = vals[3],vals[4],vals[5]
         given_file.close()
-        return ls, lv
+        return l, h
 
     def incoherent_board_detected(self, board):
         nb_cubes = len(np.where(board == 2)[0])
@@ -283,8 +288,8 @@ class PlaygroundTicTacToe():
 class Robot():
     def __init__(self) -> None:
         self.reachy = ReachySDK('localhost')
-        #for f in self.reachy.fans.values():
-        #    f.on()
+        for f in self.reachy.fans.values():
+            f.on()
     def reset(self):
         self.pawn_played = 0
 
@@ -432,7 +437,8 @@ class Robot():
         self.reachy.r_arm.r_shoulder_pitch.torque_limit = 75
         self.reachy.r_arm.r_elbow_pitch.torque_limit = 75
 
-    def happy(self):    
+    def happy(self):
+        self.reachy.turn_on('reachy')    
         self.reachy.joints.l_antenna.speed_limit = 0.0
         self.reachy.joints.r_antenna.speed_limit = 0.0
         
@@ -453,6 +459,7 @@ class Robot():
         time.sleep(1)
 
     def sad(self):
+        self.reachy.turn_on('reachy')  
         pos = [
             (-0.5, 150),
             (-0.4, 110),
@@ -502,17 +509,17 @@ class Robot():
 
         return board
 
+
 playground = PlaygroundTicTacToe()
-robot = Robot()
-
-lowS, lowV = playground.get_HSV()
-
-#lowS, lowV = playground.calibrate_HSV()
-#playground.live_view()
-    
+robot      = Robot()
+low, high = playground.get_HSV()
 boardEmpty = np.zeros((3, 3), dtype=np.uint8).flatten()
 
-board = playground.get_board(lowS, lowV)
+#low, high = playground.calibrate_HSV()
+playground.live_view()
+    
+
+
 option = 0
 
 if option == 0:
@@ -528,10 +535,16 @@ if option == 0:
     
     #game loop
     while True:
-        board = playground.get_board(lowS, lowV)
-        print(board)
+        board = playground.get_board(low, high)
+
         if board is not None:
             print("in")
+            game = np.array_split(board,3)
+            print(game[0])
+            print(game[1])
+            print(game[2])
+            print('     ')
+            print('     ')
             if not reachy_turn:
                 if playground.has_human_played(board, last_board):
                     reachy_turn = True
@@ -541,7 +554,7 @@ if option == 0:
             if (playground.incoherent_board_detected(board) or
                         playground.cheating_detected(board, last_board, reachy_turn)):
                 print("incoherent board or cheating")
-                double_check_board = playground.get_board(lowS, lowV)
+                double_check_board = playground.get_board(low, high)
                 print(double_check_board)
                 if np.any(double_check_board != last_board): 
                     #tictactoe_playground.shuffle_board()
@@ -553,12 +566,7 @@ if option == 0:
                 
             if (not playground.is_final(board)) and reachy_turn:
                 action = -playground.choose_next_action(board)[0]+8
-                game = np.array_split(board,3)
-                print(game[0])
-                print(game[1])
-                print(game[2])
-                print('     ')
-                print('     ')
+
                 board = robot.play(action, board)
                 
                 last_board = board
@@ -582,12 +590,14 @@ elif option==1:
     for k in range(150):
     #Save images for dataset
         for i in range(9):
-            boxes = playground.get_images(lowS, lowV)
+            boxes = playground.get_images(low, high)
             cv2.imwrite('images/new/'+str(j)+'.jpg', boxes[i])
             j=j+1
         k=k+1
         time.sleep(6)
 else:
     while True:
-        board = playground.get_board(lowS, lowV)
+        #print(low)
+        #print(high)
+        board = playground.get_board(low, high)
         print(board)

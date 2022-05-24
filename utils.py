@@ -6,9 +6,6 @@ import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg._compressed_image import CompressedImage
-from reachy_sdk import ReachySDK
-from reachy_sdk.trajectory import goto
-from reachy_sdk.trajectory.interpolation import InterpolationMode
 
 
 class RosCameraSubscriber(Node, ):
@@ -45,7 +42,7 @@ def intializePredectionModel():
     model = pickle.load(pickle_in)
     return model
     
-def preProcessHSV(img:np.array, lowS, lowV):
+def preProcessHSV(img:np.array, low, high):
     """Preprocess image to detect the board
 
     Args:
@@ -55,11 +52,9 @@ def preProcessHSV(img:np.array, lowS, lowV):
         np.array: array with hsv masked image
     """   
     kernel = np.ones((5,5), np.uint8)
-    lower = (80, 0, 0)
-    upper = (255, 255, 255)
     blurred = cv2.GaussianBlur(img, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-    imgThreshold = cv2.inRange(hsv, lower, upper)
+    imgThreshold = cv2.inRange(hsv, low, high)
     imgThreshold = cv2.dilate(imgThreshold,kernel,iterations = 1)
     return imgThreshold
 
