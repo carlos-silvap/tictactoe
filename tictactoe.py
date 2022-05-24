@@ -13,11 +13,16 @@ class PlaygroundTicTacToe():
         time.sleep(2)
         self.image_getter = RosCameraSubscriber(node_name='image_viewer', side = "right")
 
+    def reset(self):
+        self.pawn_played = 0
+        empty_board = np.zeros((3, 3), dtype=np.uint8).flatten()
+        return empty_board
+
  # Playground and game functions
     def coin_flip(self):
         coin = np.random.rand() > 0.5
-        
-        print('reachy' if coin else 'human')
+        #print(coin)
+        #print('reachy' if coin else 'human')
         return coin
 
     def live_view(self):
@@ -41,6 +46,8 @@ class PlaygroundTicTacToe():
 
             if biggest.size != 0:
                 biggest = reorder(biggest)
+                print(maxArea)
+                #print(biggest)
                 cv2.drawContours(imgBigContour, biggest, -1, (0, 0, 255), 25)                                   # DRAW THE BIGGEST CONTOUR
                 pts1 = np.float32(biggest)                                                                      # PREPARE POINTS FOR WARP
                 pts2 = np.float32([[0, 0],[widthImg, 0], [0, heightImg],[widthImg, heightImg]])                 # PREPARE POINTS FOR WARP
@@ -76,8 +83,8 @@ class PlaygroundTicTacToe():
         img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
         imgThreshold = preProcessHSV(img, lowS, lowV)
         contours, _ = cv2.findContours(imgThreshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            # FIND ALL CONTOURS
-        biggest, _ = biggestContour(contours)                                                               # FIND THE BIGGEST CONTOUR
-        if biggest.size != 0:
+        biggest, maxArea = biggestContour(contours)                                                               # FIND THE BIGGEST CONTOUR
+        if biggest.size != 0 and maxArea>25000:
             biggest = reorder(biggest)
             pts1 = np.float32(biggest)                                                                      # PREPARE POINTS FOR WARP
             pts2 = np.float32([[0, 0],[widthImg, 0], [0, heightImg],[widthImg, heightImg]])                 # PREPARE POINTS FOR WARP
@@ -88,6 +95,8 @@ class PlaygroundTicTacToe():
             numbers = np.asarray(numbers)
             board = np.array_split(numbers,3)
             return numbers
+        else:
+            return None
 
     def choose_next_action(self, board):
         actions = value_actions(board)
@@ -235,11 +244,49 @@ class PlaygroundTicTacToe():
         else : 
             return True
 
+    def cheating_detected(self, board, last_board, reachy_turn):
+        # last is just after the robot played
+        delta = board - last_board
+
+        # Nothing changed
+        if np.all(delta == 0):
+            return False
+
+        # A single cube was added
+        if len(np.where(delta == 1)) == 1:
+            return False
+
+        # A single cylinder was added
+        if len(np.where(delta == 2)) == 1:
+            # If the human added a cylinder
+            if not reachy_turn:
+                return True
+            return False
+
+        return True
+
+    def has_human_played(self, current_board, last_board):
+        cube = 2
+
+        return (
+            np.any(current_board != last_board) and
+            np.sum(current_board == cube) > np.sum(last_board == cube)
+        )
+    def is_final(self, board):
+        winner = self.get_winner(board)
+        if winner in (1, 2):
+            return True
+        else:
+            return 0 not in board
+
+
 class Robot():
     def __init__(self) -> None:
         self.reachy = ReachySDK('localhost')
-        for f in self.reachy.fans.values():
-            f.on()
+        #for f in self.reachy.fans.values():
+        #    f.on()
+    def reset(self):
+        self.pawn_played = 0
 
     def play_pawn(self, grab_index, box_index):
         self.reachy.r_arm.r_gripper.speed_limit = 80
@@ -405,7 +452,7 @@ class Robot():
         self.reachy.joints.r_antenna.goal_position = 0.0
         time.sleep(1)
 
-    def sad(reachy):
+    def sad(self):
         pos = [
             (-0.5, 150),
             (-0.4, 110),
@@ -417,60 +464,130 @@ class Robot():
         ]
 
         for (z, antenna_pos) in pos:
-            reachy.head.look_at(0.5, 0.0, z, duration=1.0)
+            #reachy.head.look_at(0.5, 0.0, z, duration=1.0)
             #TC reachy.goto({
             #    'head.left_antenna': antenna_pos,#changer
             #    'head.right_antenna': -antenna_pos,
             #}, duration=1.5, wait=True, interpolation_mode='minjerk')
-            reachy.joints.l_antenna.goal_position = antenna_pos
-            reachy.joints.r_antenna.goal_position = -antenna_pos
+            self.reachy.joints.l_antenna.goal_position = antenna_pos
+            self.reachy.joints.r_antenna.goal_position = -antenna_pos
 
+    def run_my_turn(self):
+        self.goto_base_position()
+        self.reachy.turn_on('r_arm')
+        path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/my-turn.npz'
+        self.trajectoryPlayer(path)
+        self.goto_rest_position()
 
+    def run_your_turn(self):
+        self.goto_base_position()
+        self.reachy.turn_on('r_arm')
+        path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/your-turn.npz'
+        self.trajectoryPlayer(path)
+        self.goto_rest_position()
 
-board = PlaygroundTicTacToe()
-robot = Robot()
-lowS, lowV = board.get_HSV()
-
-#lowS, lowV = board.calibrate_HSV()
-#board.live_view()
-
-i = 1
-while (True):
-    
-    state = board.get_board(lowS, lowV)
-    winner = board.get_winner(state)
-    
-    if winner == 'nobody':
-
-        if (board.incoherent_board_detected(state)):
-            double_check_board = board.get_board(lowS, lowV)
-            if np.any(double_check_board != state):
-                print("RESTART") 
-                #tictactoe_playground.shuffle_board()
-                break
-
-        game_inv = state[::-1]
-        game_inv = np.array_split(game_inv,3)
-        print(game_inv[0])
-        print(game_inv[1])
-        print(game_inv[2])
-        print('       ')
-        
-        action =  - board.choose_next_action(state)[0] + 9
-        robot.play_pawn(i,action)
+    def run_random_idle_behavior(self):
         time.sleep(2)
-        
-        i = i + 1 
-    elif winner==1:
-        print('Robot won')
-        robot.reachy.turn_on('reachy')
-        robot.happy()
-        break
-    else:
-        print('Human won')
-        robot.reachy.turn_on('reachy')
-        robot.sad()
-        break
 
-robot.rest()
-robot.reachy.turn_off('reachy')
+    def play(self, action, actual_board):
+        board = actual_board.copy()
+        self.play_pawn(
+            grab_index=self.pawn_played + 1,
+            box_index=action + 1,
+        )
+
+        self.pawn_played += 1
+
+        board[action] = 1
+
+        return board
+
+playground = PlaygroundTicTacToe()
+robot = Robot()
+
+lowS, lowV = playground.get_HSV()
+
+#lowS, lowV = playground.calibrate_HSV()
+#playground.live_view()
+    
+boardEmpty = np.zeros((3, 3), dtype=np.uint8).flatten()
+
+board = playground.get_board(lowS, lowV)
+option = 0
+
+if option == 0:
+    robot.reset()
+   
+    last_board = playground.reset()
+    reachy_turn = playground.coin_flip()
+
+    if reachy_turn:
+        robot.run_my_turn()
+    else:
+        robot.run_your_turn()
+    
+    #game loop
+    while True:
+        board = playground.get_board(lowS, lowV)
+        print(board)
+        if board is not None:
+            print("in")
+            if not reachy_turn:
+                if playground.has_human_played(board, last_board):
+                    reachy_turn = True
+                else:
+                    robot.run_random_idle_behavior()
+
+            if (playground.incoherent_board_detected(board) or
+                        playground.cheating_detected(board, last_board, reachy_turn)):
+                print("incoherent board or cheating")
+                double_check_board = playground.get_board(lowS, lowV)
+                print(double_check_board)
+                if np.any(double_check_board != last_board): 
+                    #tictactoe_playground.shuffle_board()
+                    print("shuffle board")
+                    break
+                else :
+                        # False detection, we will check again next loop
+                        continue
+                
+            if (not playground.is_final(board)) and reachy_turn:
+                action = -playground.choose_next_action(board)[0]+8
+                game = np.array_split(board,3)
+                print(game[0])
+                print(game[1])
+                print(game[2])
+                print('     ')
+                print('     ')
+                board = robot.play(action, board)
+                
+                last_board = board
+                reachy_turn = False
+            
+            if playground.is_final(board):
+                winner = playground.get_winner(board)
+
+                if winner == 1:
+                    robot.happy()
+                    winner = "Robot"
+                elif winner == 2:
+                    robot.sad()
+                    winner = "Human"
+                else:
+                    robot.sad()
+                    winner = "Tie"
+                print(winner)
+elif option==1:
+    j = 488
+    for k in range(150):
+    #Save images for dataset
+        for i in range(9):
+            boxes = playground.get_images(lowS, lowV)
+            cv2.imwrite('images/new/'+str(j)+'.jpg', boxes[i])
+            j=j+1
+        k=k+1
+        time.sleep(6)
+else:
+    while True:
+        board = playground.get_board(lowS, lowV)
+        print(board)

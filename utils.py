@@ -40,7 +40,7 @@ def intializePredectionModel():
     Returns:
         model: trained model to identify cubes, cylinders or empty
     """    
-    pickle_in = open("models/model_v1.p","rb")
+    pickle_in = open("models/model_v7.p","rb")
     #pickle_in = open("models/model_trained_new_lights.p","rb")
     model = pickle.load(pickle_in)
     return model
@@ -55,7 +55,7 @@ def preProcessHSV(img:np.array, lowS, lowV):
         np.array: array with hsv masked image
     """   
     kernel = np.ones((5,5), np.uint8)
-    lower = (0, lowS, lowV)
+    lower = (80, 0, 0)
     upper = (255, 255, 255)
     blurred = cv2.GaussianBlur(img, (11, 11), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
@@ -180,9 +180,10 @@ def getPredection(boxes:list,model):
     for img in boxes:
         img = preProcessing(img)
         predictions = model.predict(img)
+        #print(predictions)
         classIndex  = np.argmax(predictions,axis=1)
         probabilityValue = np.amax(predictions)
-        if probabilityValue > 0.8:
+        if probabilityValue > 0.85:
             result.append(classIndex[0])
         else:
             result.append(0)
