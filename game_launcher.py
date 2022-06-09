@@ -22,13 +22,10 @@ def game(playground, robot):
     
     
     while True:
-
         board = playground.get_board(low, high)
         print('LBoard', last_board)
         print('NBoard',board)
         print(' ')
-        
-        #if board is not None:
         delta = board - last_board
         delta = np.sum(delta)
         print(delta)
@@ -76,6 +73,7 @@ def game(playground, robot):
                 print('RBoard', board)
                 last_board = board
                 reachy_turn = False
+                
             
             if playground.is_final(board):
                 winner = playground.get_winner(board)

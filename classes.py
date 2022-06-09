@@ -370,6 +370,8 @@ class PlaygroundTicTacToe():
 class Robot():
     def __init__(self) -> None:
         self.reachy = ReachySDK('localhost')
+        self.reachy.turn_on('head')
+        self.reachy.head.look_at(x=0.4, y=0, z=-0.6, duration=1.5)
         for f in self.reachy.fans.values():
             f.on()
     
@@ -603,11 +605,13 @@ class Robot():
     def run_your_turn(self):
         """run indication for humans turn
         """
+        self.reachy.head.look_at(x=0.9, y=0.05, z=-0.07, duration=1.5)
         self.goto_base_position()
         self.reachy.turn_on('r_arm')
         path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/your-turn.npz'
         self.trajectoryPlayer(path)
         self.goto_rest_position()
+        self.reachy.head.look_at(x=0.4, y=0, z=-0.6, duration=1.5)
 
     def run_random_idle_behavior(self):
         """wait behavior
@@ -627,4 +631,3 @@ class Robot():
         )
 
         self.pawn_played += 1
-
