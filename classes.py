@@ -15,22 +15,28 @@ class PlaygroundTicTacToe():
         rclpy.init()
         time.sleep(2)
         self.image_getter = RosCameraSubscriber(node_name='image_viewer', side = "right")
-        
-
 
     def reset(self):
         self.pawn_played = 0
         empty_board = np.zeros((3, 3), dtype=np.uint8).flatten()
         return empty_board
 
- # Playground and game functions
     def coin_flip(self):
+        """coin flip to determine who is going to start
+
+        Returns:
+            boolean: True of False to know who starts
+        """
         coin = np.random.rand() > 0.5
-        #print(coin)
-        #print('reachy' if coin else 'human')
         return coin
 
     def live_view(self, low, high):
+        """display the robots view and the image processing 
+
+        Args:
+            low: low hsv values
+            high: high hsv values
+        """
         while True:
             self.image_getter.update_image()
             img = self.image_getter.cam_img
@@ -80,31 +86,17 @@ class PlaygroundTicTacToe():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-    def get_board1(self, low, high):
-        i = 0
-        for i in range(10):
-            self.image_getter.update_image()
-            img = self.image_getter.cam_img
-            img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
-            imgThreshold = preProcessHSV(img, low, high)
-            contours, _ = cv2.findContours(imgThreshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)            # FIND ALL CONTOURS
-            biggest, maxArea = biggestContour(contours)                                                               # FIND THE BIGGEST CONTOUR
-            if biggest.size != 0 and maxArea>25000:
-                biggest = reorder(biggest)
-                pts1 = np.float32(biggest)                                                                      # PREPARE POINTS FOR WARP
-                pts2 = np.float32([[0, 0],[widthImg, 0], [0, heightImg],[widthImg, heightImg]])                 # PREPARE POINTS FOR WARP
-                matrix = cv2.getPerspectiveTransform(pts1, pts2)                                                # GER
-                imgWarpColored = cv2.warpPerspective(img, matrix, (widthImg, heightImg))
-                boxes = splitBoxes(imgWarpColored)
-                numbers = getPredection(boxes, model)
-                numbers = np.asarray(numbers)
-                #print('index',i)
-                return numbers
-            else:   
-                return None
-
-
     def get_board(self, low, high):
+        """gets the array of pawns in the board
+
+        Args:
+            low: low hsv values
+            high: high hsv values
+
+        Returns:
+            nparray: numbers depending on the prediction
+                     0: empty, 1: cylinder, 2: cube
+        """
         numbers = None
         while numbers == None:
             self.image_getter.update_image()
@@ -122,13 +114,20 @@ class PlaygroundTicTacToe():
                 boxes = splitBoxes(imgWarpColored)
                 numbers = getPredection(boxes, model)
                 numbers = np.asarray(numbers)
-                #print('index',i)
                 return numbers
             else:   
                 numbers = None
 
-
     def choose_next_action(self, board):
+        """robot chooses what is the best action to take according
+           to the current board
+
+        Args:
+            board (nparray): array with the predictions 
+
+        Returns:
+            array: best_action to take, total values, action in every value
+        """
         actions = value_actions(board)
         if np.all(board == 0):
             while True:
@@ -152,6 +151,14 @@ class PlaygroundTicTacToe():
         return best_action, value, actions
 
     def get_winner(self, board):
+        """configurations to detect the winner
+
+        Args:
+            board (array): array with the predictions of the board
+
+        Returns:
+            _type_: returns the winner of the configuration 
+        """
         win_configurations = (
             (0, 1, 2),
             (3, 4, 5),
@@ -176,6 +183,15 @@ class PlaygroundTicTacToe():
         return 'nobody'
 
     def get_images(self, lowS, lowV):
+        """get the split individual boxes of the board
+
+        Args:
+            lowS : low index of the HSV
+            lowV : high index of the HSV
+
+        Returns:
+            array: returns the boxes of the board
+        """
         self.image_getter.update_image()
         img = self.image_getter.cam_img
         img = cv2.resize(img, (widthImg, heightImg))                                                        # RESIZE IMAGE TO MAKE IT A SQUARE IMAGE
@@ -192,6 +208,9 @@ class PlaygroundTicTacToe():
         return boxes
 
     def calibrate_HSV(self):
+        """calbrate the values of HSV to detect the borders
+           of the board
+        """
         def callback(x):
             pass
         #create trackbar window
@@ -251,6 +270,11 @@ class PlaygroundTicTacToe():
         return lower_hsv, higher_hsv
 
     def get_HSV(self):
+        """gets the values of the HSV values from the file
+
+        Returns:
+            array: low and high values 
+        """
         given_file = open('hsv.txt', 'r')
 
         lines = given_file.readlines()
@@ -264,6 +288,14 @@ class PlaygroundTicTacToe():
         return l, h
 
     def incoherent_board_detected(self, board):
+        """detects of there is more cubes or cylinders in the board
+
+        Args:
+            board (array): numbers of the predictions 
+
+        Returns:
+            boolean: returns if there is al incohoerent board or not
+        """
         nb_cubes = len(np.where(board == 2)[0])
         nb_cylinders = len(np.where(board == 1)[0])
 
@@ -273,6 +305,16 @@ class PlaygroundTicTacToe():
             return True
 
     def cheating_detected(self, board, last_board, reachy_turn):
+        """detects if there is an unsual change in the board
+
+        Args:
+            board (_array_): current board
+            last_board (_array_): last board detected
+            reachy_turn (_boolean_): defines if reachy is next to play
+
+        Returns:
+            _boolean_: value to detect if there was cheeting or not
+        """
         # last is just after the robot played
         delta = board - last_board
 
@@ -294,6 +336,15 @@ class PlaygroundTicTacToe():
         return True
 
     def has_human_played(self, current_board, last_board):
+        """detects if the human already added his piece
+
+        Args:
+            current_board (_array_): board in the current moment
+            last_board (array): last board detceted
+
+        Returns:
+            _type_: _description_
+        """
         cube = 2
 
         return (
@@ -301,6 +352,14 @@ class PlaygroundTicTacToe():
             np.sum(current_board == cube) > np.sum(last_board == cube)
         )
     def is_final(self, board):
+        """detects if its the final move
+
+        Args:
+            board (array): current board detected 
+
+        Returns:
+            _type_: _description_
+        """
         winner = self.get_winner(board)
         if winner in (1, 2):
             return True
@@ -317,11 +376,11 @@ class Robot():
         self.pawn_played = 0
 
     def play_pawn(self, grab_index, box_index):
-        """_summary_
+        """set of instructions to grab, move and place the pawn
 
         Args:
-            grab_index (_type_): _description_
-            box_index (_type_): _description_
+            grab_index (int): number of piece the robot has to take
+            box_index (int): number of box the robot will put the pawn
         """
         self.reachy.r_arm.r_gripper.speed_limit = 80
         self.reachy.r_arm.r_gripper.compliant = False
