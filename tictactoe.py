@@ -82,7 +82,6 @@ class PlaygroundTicTacToe():
                 break
 
     def get_board(self, low, high):
-        boards = []
         i = 0
         for i in range(10):
             self.image_getter.update_image()
@@ -101,9 +100,9 @@ class PlaygroundTicTacToe():
                 numbers = getPredection(boxes, model)
                 numbers = np.asarray(numbers)
             #boards.append(numbers)
-            return numbers
-        else:   
-            return None
+                return numbers
+            else:   
+                return None
 
     def choose_next_action(self, board):
         actions = value_actions(board)
@@ -252,6 +251,9 @@ class PlaygroundTicTacToe():
     def cheating_detected(self, board, last_board, reachy_turn):
         # last is just after the robot played
         delta = board - last_board
+
+        if np.sum(delta > 2):
+            return True
 
         # Nothing changed
         if np.all(delta == 0):
@@ -516,11 +518,11 @@ low, high = playground.get_HSV()
 boardEmpty = np.zeros((3, 3), dtype=np.uint8).flatten()
 
 #low, high = playground.calibrate_HSV()
-playground.live_view()
+#playground.live_view()
     
 
 
-option = 0
+option = 1
 
 if option == 0:
     robot.reset()
@@ -543,7 +545,6 @@ if option == 0:
             print(game[0])
             print(game[1])
             print(game[2])
-            print('     ')
             print('     ')
             if not reachy_turn:
                 if playground.has_human_played(board, last_board):
@@ -586,7 +587,7 @@ if option == 0:
                     winner = "Tie"
                 print(winner)
 elif option==1:
-    j = 488
+    j = 369
     for k in range(150):
     #Save images for dataset
         for i in range(9):

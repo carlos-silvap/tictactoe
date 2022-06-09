@@ -37,7 +37,7 @@ def intializePredectionModel():
     Returns:
         model: trained model to identify cubes, cylinders or empty
     """    
-    pickle_in = open("models/model_v7.p","rb")
+    pickle_in = open("models/model_v8.p","rb")
     #pickle_in = open("models/model_trained_new_lights.p","rb")
     model = pickle.load(pickle_in)
     return model
