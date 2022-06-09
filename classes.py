@@ -372,6 +372,7 @@ class Robot():
         self.reachy = ReachySDK('localhost')
         for f in self.reachy.fans.values():
             f.on()
+    
     def reset(self):
         self.pawn_played = 0
 
@@ -436,14 +437,23 @@ class Robot():
         self.goto_rest_position()
 
     def goto_rest_position(self, duration=1.0):
+        """brings arm to final position 
+
+        Args:
+            duration (float, optional): _description_. Defaults to 1.0.
+        """
         time.sleep(0.1)
-        #self.reachy.head.look_at(x=1, y=0, z=0, duration=1) 
         self.goto_base_position(0.6 * duration)
         time.sleep(0.1)
 
         self.reachy.turn_on('r_arm')
 
     def goto_base_position(self, duration=1.0):
+        """go to the position between moves
+
+        Args:
+            duration (float, optional): _description_. Defaults to 1.0.
+        """
  
         self.reachy.turn_on('r_arm')
 
@@ -464,7 +474,12 @@ class Robot():
         self.reachy.r_arm.r_shoulder_pitch.torque_limit = 75
         self.reachy.r_arm.r_elbow_pitch.torque_limit = 75
 
-    def goto_position(self, path): 
+    def goto_position(self, path):
+        """move the arm to the position desired
+
+        Args:
+            path (string): path of the recorded trajectory
+        """
         self.reachy.turn_on('r_arm')
         move = np.load(path)
         move.allow_pickle=1
@@ -479,6 +494,11 @@ class Robot():
         )
 
     def trajectoryPlayer(self,path):
+        """trajectory of the arm getting the pice and putting it in the right box
+
+        Args:
+            path (_type_): _description_
+        """
         self.reachy.turn_on('r_arm')
         move = np.load(path)
         move.allow_pickle=1
@@ -526,6 +546,8 @@ class Robot():
         self.reachy.r_arm.r_elbow_pitch.torque_limit = 75
 
     def happy(self):
+        """happy celebration when robot wins
+        """
         self.reachy.turn_on('reachy')    
         self.reachy.joints.l_antenna.speed_limit = 0.0
         self.reachy.joints.r_antenna.speed_limit = 0.0
@@ -547,6 +569,8 @@ class Robot():
         time.sleep(1)
 
     def sad(self):
+        """sad reaction when robot loses
+        """
         self.reachy.turn_on('reachy')  
         pos = [
             (-0.5, 150),
@@ -568,6 +592,8 @@ class Robot():
             self.reachy.joints.r_antenna.goal_position = -antenna_pos
 
     def run_my_turn(self):
+        """indication to tell whose turn it is
+        """
         self.goto_base_position()
         self.reachy.turn_on('r_arm')
         path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/my-turn.npz'
@@ -575,6 +601,8 @@ class Robot():
         self.goto_rest_position()
 
     def run_your_turn(self):
+        """run indication for humans turn
+        """
         self.goto_base_position()
         self.reachy.turn_on('r_arm')
         path = '/home/reachy/repos/TicTacToe/tictactoe/movements/moves-2021_right/your-turn.npz'
@@ -582,10 +610,17 @@ class Robot():
         self.goto_rest_position()
 
     def run_random_idle_behavior(self):
+        """wait behavior
+        """
         time.sleep(2)
 
     def play(self, action, actual_board):
-        board = actual_board.copy()
+        """play beahvior
+
+        Args:
+            action (_type_): _description_
+            actual_board (_type_): _description_
+        """
         self.play_pawn(
             grab_index=self.pawn_played + 1,
             box_index=action + 1,
