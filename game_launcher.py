@@ -96,7 +96,7 @@ robot =  Robot()
 if __name__ == "__main__":
     #playground.calibrate_HSV()
     low, high = playground.get_HSV()
-    #playground.live_view(low, high)
+    playground.live_view(low, high)
     
     
     playground.reset()
